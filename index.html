@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html>
+
+    <head>
+        <meta name="author" content="15t5801g 宇野 貴士"></meta>
+        <title>H29 3DCG-programing-＃2</title>
+    <link rel="stylesheet" type="text/css" href="css/menu_style.css">
+        <script type="text/javascript" src="src/Three.js"></script>
+        <script type="text/javascript" src="src/loaders/MTLLoader.js"></script>
+        <script type="text/javascript" src="src/loaders/OBJLoader.js"></script>
+        <script type="text/javascript" src="src/loaders/MMDLoader.js"></script>
+        <script type="text/javascript" src="src/stats.js"></script>
+	   <script type="text/javascript" src="src/physi.js"></script>
+       <script type="text/javascript" src="src/jquery-3.2.1.js"></script>
+    <script type="text/javascript" src="src/menu.js"></script>
+	
+    </head>
+
+    <body>
+        
+    <header>
+	    <div class="menu_button"><span>MODE</span></div>
+	    <nav class="nav" style="display: none;">
+		<ul>
+                <li><a href="TUTORIAL.html" class="menu_link">TUTORIAL</a></li>
+            <li><a href="15T5801-2.html" class="menu_link">EASY</a></li>
+		    <li><a href="NORMAL.html" class="menu_link">NORMAL</a></li>
+            <li><a href="HARD.html" class="menu_link">HARD</a></li>
+            <li><a href="EX.html" class="menu_link">EXTREAM HARD</a></li>
+		</ul>
+	    </nav>
+	</header>
+        <script>
+            Physijs.scripts.worker = 'src/physijs_worker.js';
+            Physijs.scripts.ammo = 'ammo.js';
+            // グローバル変数
+            var bgm;
+            var renderer;
+            var scene;
+            var camera;
+            var plane;
+            var cv33plane;
+            var pivot;
+            var mtlLoader;
+            var mtlLoader2;
+            var mesh;
+            var mesh2;
+            var sphere_1;
+            var cv33box;
+            var cv33boxGeometry;
+            var cv33block_material;
+            var hammer_m,hammer_c;
+            var initScene, initEventHandling, render, createTower, loader,
+		 render_stats, physics_stats, scene, dir_light, am_light, camera,
+		tatami, blocks = [], tatami_material, block_material, intersect_plane,
+		selected_block = null, mouse_position = new THREE.Vector3, block_offset = new THREE.Vector3, _i, _v3 = new THREE.Vector3;
+                
+                
+            function init() {
+                		renderer = new THREE.WebGLRenderer({ antialias: true });
+                        renderer.setSize( window.innerWidth, window.innerHeight );
+                        renderer.shadowMap.enabled = true;
+                        renderer.shadowMapSoft = true;
+                        renderer.setClearColor(0xffffff, 1.0);
+                        document.getElementById( 'viewport' ).appendChild( renderer.domElement );
+                		render_stats = new Stats();
+                        render_stats.domElement.style.position = 'absolute';
+                        render_stats.domElement.style.top = '70px';
+                        render_stats.domElement.style.zIndex = 100;
+                        document.getElementById( 'viewport' ).appendChild( render_stats.domElement );
+
+                        physics_stats = new Stats();
+                        physics_stats.domElement.style.position = 'absolute';
+                        physics_stats.domElement.style.top = '120px';
+                        physics_stats.domElement.style.zIndex = 100;
+                        document.getElementById( 'viewport' ).appendChild( physics_stats.domElement );
+                
+                // シーン
+                    scene = new Physijs.Scene({ fixedTimeStep: 1 / 120 });
+                    scene.setGravity(new THREE.Vector3( 0, -100, 0 ));
+                    scene.addEventListener(
+			             'update',
+                        function() {
+
+                            if ( selected_block !== null ) {
+
+                                _v3.copy( mouse_position ).add( block_offset ).sub( selected_block.position ).multiplyScalar( 5 );
+                                _v3.y = 0;
+                                selected_block.setLinearVelocity( _v3 );
+
+                                // Reactivate all of the blocks
+                                _v3.set( 0, 0, 0 );
+                                for ( _i = 0; _i < blocks.length; _i++ ) {
+                                    blocks[_i].applyCentralImpulse( _v3 );
+                                }
+                            }
+
+                            scene.simulate( undefined, 1 );
+                            physics_stats.update();
+                        }
+                    );
+
+                    var listener = new THREE.AudioListener();
+                    scene.add( listener );
+                    //audio source
+                    //http://www.hmix.net/music_gallery/image/asian.htm
+                    // create a global audio source
+                    var sound = new THREE.Audio( listener );
+                                        var audioLoader = new THREE.AudioLoader();
+                    audioLoader.load( 'audio/easy.mp3', function( buffer ) {
+                        sound.setBuffer( buffer );
+                        sound.setLoop( true );
+                        sound.setVolume( 0.5 );
+                        sound.play();
+                    });
+                //光源設定　スポットとDirectionalの二つを使う。
+                //scene
+                var sceneLight;
+                sceneLight = new THREE.DirectionalLight(0xffffff);
+                sceneLight.position.set(0, 50, 50);
+                sceneLight.castShadow = false;
+                scene.add(sceneLight);
+                //spotlight 影を作る
+                var spotLight;
+                spotLight = new THREE.SpotLight(0xffffff);
+                spotLight.position.set(0, 70, 70);
+                spotLight.castShadow = true;
+                scene.add(spotLight);
+                //512だと影がギザギザなのでよりクリアにする。基本同値
+                renderer.shadowMapEnabled = true;
+                
+                
+                
+                // カメラ
+                camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.x = 0;
+                camera.position.y = 20;
+                camera.position.z = 50;
+                camera.lookAt(scene.position); 
+                
+                
+                loader = new THREE.TextureLoader();
+                		// Materials
+		      tatami_material = Physijs.createMaterial(
+			 new THREE.MeshLambertMaterial({ map: loader.load( 'texture/tatami.jpg' )}),.9,.2);
+                tatami_material.map.wrapS = tatami_material.map.wrapT = THREE.RepeatWrapping;
+		          tatami_material.map.repeat.set( 5, 5 );
+                tatami = new Physijs.BoxMesh(
+			     new THREE.BoxGeometry(100, 1, 100),
+			     tatami_material,
+			     0, // mass
+			     { restitution: .2, friction: .8 }
+		      );
+		      tatami.position.y = -.5;
+              tatami.position.z=-15;
+                tatami.receiveShadow = true;
+		          scene.add( tatami );
+                
+                //cv33の描画。
+                //cv33の箱
+                cv33block_material = Physijs.createMaterial(
+			     new THREE.MeshLambertMaterial({ color: 0xffffff,
+                       visible: false}),
+			     .1, // medium friction
+			     .01 // medium restitution
+                        );
+                cv33boxGeometry = new THREE.BoxGeometry( 3.7, 3.5, 7.6 );
+                cv33box = new Physijs.BoxMesh( cv33boxGeometry, cv33block_material );
+                cv33box.position.y=cylinder_height*4+2;
+                scene.add(cv33box);
+                
+                var cv33planeGeometry = new THREE.PlaneGeometry(1, 1);
+                var cv33planeMaterial = new THREE.MeshPhongMaterial({color: 0xcccccc,visible:false});
+                cv33plane = new THREE.Mesh(cv33planeGeometry, cv33planeMaterial);
+                cv33plane.position.y=-1.8;
+                cv33box.add(cv33plane);
+                
+                //hammer
+                var r=0.8;
+                var height=13;
+                var hammerGeometry=new THREE.CylinderGeometry(r, r, height, 100, 100);
+                var hammerMaterial = Physijs.createMaterial(
+                    new THREE.MeshLambertMaterial({
+                    map:loader.load('texture/wood.jpg'),
+                    shininess: 100,
+                })
+                ,.4,.4
+                );
+                hammer_m=new Physijs.CylinderMesh(hammerGeometry,hammerMaterial);
+                hammer_m.position.x=0;
+                hammer_m.position.z=30;
+                hammer_m.position.y=r/2+1;
+                hammer_m.rotation.z=0.5*Math.PI;
+                hammer_m.rotation.y=0.5*Math.PI;
+                
+                var r2=1.8;
+                var height2=8;
+                var hammerGeometry2=new THREE.CylinderGeometry(r2, r2, height2, 100, 100);
+                var hammerMaterial2 = Physijs.createMaterial(
+                    new THREE.MeshLambertMaterial({
+                    map:loader.load('texture/wood.jpg'),
+                    shininess: 100,
+                })
+                ,.4,.4
+                );
+                hammer_c=new Physijs.CylinderMesh(hammerGeometry2,hammerMaterial2);
+                hammer_m.add(hammer_c);
+                hammer_c.position.y=-height/2;
+                hammer_c.rotation.z=0.5*Math.PI;
+                hammer_c.rotation.y=0.5*Math.PI;
+                
+                scene.add(hammer_m);
+                blocks.push(hammer_m);
+                blocks.push(hammer_c);
+                
+                mtlLoader2 = new THREE.MTLLoader();
+                mtlLoader2.setPath('./CV33_1.0/');
+                mtlLoader2.load('ntex.mtl', (materials) => {
+                materials.preload();
+
+                const objLoader2 = new THREE.OBJLoader();
+                objLoader2.setMaterials(materials);
+                objLoader2.setPath('./CV33_1.0/');
+                objLoader2.load('ntex.obj', (object) => {
+                mesh2 = object;
+                this.cv33plane.add(mesh2);
+                    });
+                });
+                
+                createCylinder();
+
+                intersect_plane = new THREE.Mesh(
+			new THREE.PlaneGeometry( 150, 150 ),
+			new THREE.MeshBasicMaterial({ opacity: 0, transparent: true })
+		);
+		intersect_plane.rotation.x = Math.PI / -2;
+		scene.add( intersect_plane );
+                
+            initEventHandling();
+		
+		requestAnimationFrame( render );
+		scene.simulate();
+                // レンダラーをhtmlに追加
+                document.body.appendChild(renderer.domElement);
+                render();
+            }
+            function colorGen(){ 
+                var color = (Math.random() * 0xFFFFFF | 0).toString(16);
+                var randomColor = "#" + ("000000" + color).slice(-6);
+                return randomColor;
+            }
+            var cylinder_height = 4;
+            function createCylinder(){
+                var cylinder_r = 3 ;
+                var cylinderGeometory_daru=new THREE.CylinderGeometry(cylinder_r, cylinder_r, cylinder_height, 100, 100);
+                var cylinderMaterial_daru = Physijs.createMaterial(
+                    new THREE.MeshLambertMaterial({
+                    color:0x440000,
+                    shininess: 100
+                }),.1,.1
+                );
+                var cylinders=new Physijs.CylinderMesh(cylinderGeometory_daru,cylinderMaterial_daru);    
+                cylinders.position.y=cylinder_height/2;
+                cylinders.castShadow=true;
+                scene.add(cylinders);
+
+                var cylinderMaterial_daru = Physijs.createMaterial(
+                    new THREE.MeshLambertMaterial({
+                    color:0x880000,
+                    shininess: 100
+                }),1,1
+                );
+                var cylinders=new Physijs.CylinderMesh(cylinderGeometory_daru,cylinderMaterial_daru);    
+                cylinders.position.y=cylinder_height/2+cylinder_height*1;
+                cylinders.castShadow=true;
+                scene.add(cylinders);
+                var cylinderMaterial_daru = Physijs.createMaterial(
+                    new THREE.MeshLambertMaterial({
+                    color:0xbb0000,
+                    shininess: 100
+                }),1,1
+                );
+                var cylinders=new Physijs.CylinderMesh(cylinderGeometory_daru,cylinderMaterial_daru);    
+                cylinders.position.y=cylinder_height/2+cylinder_height*2;
+                cylinders.castShadow=true;
+                scene.add(cylinders);
+
+                var cylinderMaterial_daru = Physijs.createMaterial(
+                    new THREE.MeshLambertMaterial({
+                    color:0xff0000,
+                    shininess: 100
+                }),1,1
+                );
+                var cylinders=new Physijs.CylinderMesh(cylinderGeometory_daru,cylinderMaterial_daru);    
+                cylinders.position.y=cylinder_height/2+cylinder_height*3;
+                cylinders.castShadow=true;
+                scene.add(cylinders);
+
+            }
+        
+            function render() {
+                requestAnimationFrame(render);
+                renderer.render(scene, camera);
+                render_stats.update();
+            }
+                
+            function handleResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            
+            initEventHandling = (function() {
+		var _vector = new THREE.Vector3,
+			handleMouseDown, handleMouseMove, handleMouseUp;
+		
+		handleMouseDown = function( evt ) {
+			var ray, intersections;
+			
+			_vector.set(
+				( evt.clientX / window.innerWidth ) * 2 - 1,
+				-( evt.clientY / window.innerHeight ) * 2 + 1,
+				1
+			);
+
+			_vector.unproject( camera );
+			
+			ray = new THREE.Raycaster( camera.position, _vector.sub( camera.position ).normalize() );
+			intersections = ray.intersectObjects( blocks );
+
+			if ( intersections.length > 0 ) {
+				selected_block = intersections[0].object;
+				
+				_vector.set( 0, 0, 0 );
+				selected_block.setAngularFactor( _vector );
+				selected_block.setAngularVelocity( _vector );
+				selected_block.setLinearFactor( _vector );
+				selected_block.setLinearVelocity( _vector );
+
+				mouse_position.copy( intersections[0].point );
+				block_offset.subVectors( selected_block.position, mouse_position );
+				
+				intersect_plane.position.y = mouse_position.y;
+			}
+		};
+		
+		handleMouseMove = function( evt ) {
+			
+			var ray, intersection,
+				i, scalar;
+			
+			if ( selected_block !== null ) {
+				
+				_vector.set(
+					( evt.clientX / window.innerWidth ) * 2 - 1,
+					-( evt.clientY / window.innerHeight ) * 2 + 1,
+					1
+				);
+				_vector.unproject( camera );
+				
+				ray = new THREE.Raycaster( camera.position, _vector.sub( camera.position ).normalize() );
+				intersection = ray.intersectObject( intersect_plane );
+				mouse_position.copy( intersection[0].point );
+			}
+			
+		};
+		
+		handleMouseUp = function( evt ) {
+			
+			if ( selected_block !== null ) {
+				_vector.set( 1, 1, 1 );
+				selected_block.setAngularFactor( _vector );
+				selected_block.setLinearFactor( _vector );
+				
+				selected_block = null;
+			}
+			
+		};
+		
+		return function() {
+			renderer.domElement.addEventListener( 'mousedown', handleMouseDown );
+			renderer.domElement.addEventListener( 'mousemove', handleMouseMove );
+			renderer.domElement.addEventListener( 'mouseup', handleMouseUp );
+		};
+	})();
+            
+            window.onload = init;
+            // resizeイベントが発生したときにhandleResizeが呼び出されるよう設定
+            window.addEventListener('resize', handleResize, false);
+        </script> 
+
+	<div id="viewport"></div>
+    </body>
+</html>
