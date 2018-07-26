@@ -8,7 +8,7 @@ Gitpagesにて公開していますので次のURLにアクセスしていただ
 
 達磨のグラフィックスが用意できなかった都合上とりあえずCV３３をのせています。ガルパンはいいぞ。
 
-#daruma_fall
+# daruma_fall
 in this repos include daruma_falling_game.daruma_falling_game is traditional japanese game.
 Its using Threejs & Physijs.
 please playing this game https://uno-takashi.github.io/daruma_otoshi/
